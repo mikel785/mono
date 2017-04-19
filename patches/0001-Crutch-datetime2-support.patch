@@ -1,0 +1,79 @@
+From 5006d618ca7efeef3bdc6741fa3b149bb2b10ac4 Mon Sep 17 00:00:00 2001
+From: Mikhail Kanygin <kanygin@vector-best.ru>
+Date: Tue, 25 Oct 2016 22:40:37 +0600
+Subject: [PATCH] Crutch datetime2 support.
+
+---
+ .../Mono.Data.Tds/Mono.Data.Tds.Protocol/Tds.cs    |  6 ++++
+ .../System.Data.SqlClient/SqlDataReader.cs         | 33 ++++++++++++++++++++++
+ 2 files changed, 39 insertions(+), 0 deletions(-)
+
+diff --git a/mcs/class/Mono.Data.Tds/Mono.Data.Tds.Protocol/Tds.cs b/mcs/class/Mono.Data.Tds/Mono.Data.Tds.Protocol/Tds.cs
+index 5cb0ae8..5eb4752 100644
+--- a/mcs/class/Mono.Data.Tds/Mono.Data.Tds.Protocol/Tds.cs
++++ b/mcs/class/Mono.Data.Tds/Mono.Data.Tds.Protocol/Tds.cs
+@@ -176,6 +176,12 @@ namespace Mono.Data.Tds.Protocol
+ 			set { recordsAffected = value; }
+ 		}
+ 
++		public string ServerName {
++			get {
++				return databaseProductName;
++			}
++		}
++
+ 		public string ServerVersion {
+ 			get { return databaseProductVersion; }
+ 		}
+diff --git a/mcs/class/System.Data/System.Data.SqlClient/SqlDataReader.cs b/mcs/class/System.Data/System.Data.SqlClient/SqlDataReader.cs
+index 9cb4b8a..ffe6da0 100644
+--- a/mcs/class/System.Data/System.Data.SqlClient/SqlDataReader.cs
++++ b/mcs/class/System.Data/System.Data.SqlClient/SqlDataReader.cs
+@@ -702,6 +702,12 @@ namespace System.Data.SqlClient
+ 		DateTime GetDateTime (int i)
+ 		{
+ 			object value = GetValue (i);
++			// crutch for datetime2 from string conversion
++			if (value is string) {
++				var dt = DateTime2Crutch.Parse ((string)value);
++				if (dt != null)
++					return dt.Value;
++			}
+ 			if (!(value is DateTime)) {
+ 				if (value is DBNull) throw new SqlNullValueException ();
+ 				else throw new InvalidCastException ("Type is " + value.GetType ().ToString ());
+@@ -1449,4 +1455,31 @@ namespace System.Data.SqlClient
+ 
+ 		#endregion // Methods
+ 	}
++
++	internal static class DateTime2Crutch {
++		public static readonly string[] Formats = {
++			"yyyy-MM-dd HH:mm:ss",
++			"yyyy-MM-dd HH:mm:ss.f",
++			"yyyy-MM-dd HH:mm:ss.ff",
++			"yyyy-MM-dd HH:mm:ss.fff",
++			"yyyy-MM-dd HH:mm:ss.ffff",
++			"yyyy-MM-dd HH:mm:ss.fffff",
++			"yyyy-MM-dd HH:mm:ss.ffffff",
++			"yyyy-MM-dd HH:mm:ss.fffffff",
++		};
++
++		public static Nullable<DateTime> Parse(string str) {
++			int precision = 0;
++			var lastDotIndex = str.LastIndexOf('.');
++			if (lastDotIndex != -1)
++				precision = str.Length - lastDotIndex - 1;
++
++			var format = Formats[precision];
++			DateTime result;
++			if (DateTime.TryParseExact (str, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out result)) {
++				return new DateTime? (result);
++			}
++			return null;
++		}
++	}
+ }
+-- 
+2.1.4
+

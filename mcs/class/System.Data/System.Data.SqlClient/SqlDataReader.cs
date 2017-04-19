@@ -702,6 +702,12 @@ namespace System.Data.SqlClient
 		DateTime GetDateTime (int i)
 		{
 			object value = GetValue (i);
+			// crutch for datetime2 from string conversion
+			if (value is string) {
+				var dt = DateTime2Crutch.Parse ((string)value);
+				if (dt != null)
+					return dt.Value;
+			}
 			if (!(value is DateTime)) {
 				if (value is DBNull) throw new SqlNullValueException ();
 				else throw new InvalidCastException ("Type is " + value.GetType ().ToString ());
@@ -1448,5 +1454,32 @@ namespace System.Data.SqlClient
 		}
 
 		#endregion // Methods
+	}
+
+	internal static class DateTime2Crutch {
+		public static readonly string[] Formats = {
+			"yyyy-MM-dd HH:mm:ss",
+			"yyyy-MM-dd HH:mm:ss.f",
+			"yyyy-MM-dd HH:mm:ss.ff",
+			"yyyy-MM-dd HH:mm:ss.fff",
+			"yyyy-MM-dd HH:mm:ss.ffff",
+			"yyyy-MM-dd HH:mm:ss.fffff",
+			"yyyy-MM-dd HH:mm:ss.ffffff",
+			"yyyy-MM-dd HH:mm:ss.fffffff",
+		};
+
+		public static Nullable<DateTime> Parse(string str) {
+			int precision = 0;
+			var lastDotIndex = str.LastIndexOf('.');
+			if (lastDotIndex != -1)
+				precision = str.Length - lastDotIndex - 1;
+
+			var format = Formats[precision];
+			DateTime result;
+			if (DateTime.TryParseExact (str, format, CultureInfo.InvariantCulture, DateTimeStyles.None, out result)) {
+				return new DateTime? (result);
+			}
+			return null;
+		}
 	}
 }
