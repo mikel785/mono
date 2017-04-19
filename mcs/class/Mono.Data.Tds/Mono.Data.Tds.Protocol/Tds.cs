@@ -176,6 +176,12 @@ namespace Mono.Data.Tds.Protocol
 			set { recordsAffected = value; }
 		}
 
+		public string ServerName {
+			get {
+				return databaseProductName;
+			}
+		}
+
 		public string ServerVersion {
 			get { return databaseProductVersion; }
 		}
